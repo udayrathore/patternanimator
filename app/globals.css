@@ -31,21 +31,21 @@ input {
 }
 
 .grid-echo-layer {
-  filter: drop-shadow(0 0 14px rgba(130, 214, 197, 0.32));
+  filter: drop-shadow(0 0 14px var(--shape-glow));
 }
 
-.grid-echo-cell {
+.grid-echo-mark {
   animation: gridEcho var(--motion-duration, 5.5s) ease-in-out infinite;
-  fill: rgba(255, 255, 255, 0.05);
-  opacity: 0.35;
-  stroke: url(#gridStroke);
-  stroke-width: 1.3;
+  fill: var(--shape-faint);
+  opacity: 0.42;
+  stroke: var(--shape-stroke);
+  stroke-width: 1.35;
   transform-box: fill-box;
   transform-origin: center;
 }
 
 .sweep-field {
-  filter: drop-shadow(0 0 calc(14px + 20px * var(--motion-intensity, 0.6)) rgba(245, 215, 126, 0.28));
+  filter: drop-shadow(0 0 19px var(--shape-glow));
   transform: translateY(calc(28px * var(--motion-variation, 0.4)));
 }
 
@@ -61,8 +61,10 @@ input {
 
 .signal-sweep-node {
   animation: nodeBlink var(--motion-duration, 4.5s) ease-in-out infinite;
-  fill: #82d6c5;
+  fill: var(--shape-fill);
   opacity: 0.14;
+  stroke: var(--shape-stroke);
+  stroke-width: 0.85;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -71,17 +73,17 @@ input {
   0%,
   100% {
     opacity: 0.28;
-    transform: scale(0.84) rotate(0deg);
+    transform: scale(0.88) rotate(0deg);
   }
 
   42% {
-    opacity: 0.92;
-    transform: scale(var(--pulse-scale, 1.26)) rotate(18deg);
+    opacity: 0.88;
+    transform: scale(1.04) rotate(18deg);
   }
 
   70% {
     opacity: 0.5;
-    transform: scale(0.95) rotate(36deg);
+    transform: scale(0.96) rotate(36deg);
   }
 }
 
@@ -93,7 +95,7 @@ input {
   }
 
   46% {
-    opacity: calc(0.34 + 0.56 * var(--motion-intensity, 0.6));
+    opacity: 0.84;
     transform: translateX(42px);
   }
 
@@ -111,7 +113,7 @@ input {
   }
 
   46% {
-    opacity: calc(0.28 + 0.54 * var(--motion-intensity, 0.6));
+    opacity: 0.78;
     transform: scale(1.26);
   }
 }
