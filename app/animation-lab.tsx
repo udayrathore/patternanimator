@@ -12,6 +12,9 @@ type ShapeId = "square" | "circle" | "diamond" | "spark";
 type FillId = "outline" | "mint" | "sun" | "coral";
 type RadiusId = "sharp" | "soft" | "round";
 type CodeTab = "logic" | "css";
+type ImageMode = "fill" | "tile" | "stretch" | "crop";
+type TileBlendMode = "normal" | "multiply" | "screen" | "overlay" | "soft-light" | "difference";
+type ToolIconName = "apply" | "chevron-left" | "chevron-right" | "code" | "copy" | "fullscreen" | "grid" | "image" | "pattern" | "reset" | "sync" | "wave";
 
 type EffectSettings = {
   density: number;
@@ -27,6 +30,19 @@ type EffectSettings = {
   sectionColor2: string;
   sectionColor3: string;
   sectionColor4: string;
+  rhythm?: number;
+  patternOffset?: number;
+  tileRadius?: number;
+  fillOpacity?: number;
+  strokeWidth?: number;
+  strokeColor?: string;
+  boxColor?: string;
+  imageMode?: ImageMode;
+  imageBrightness?: number;
+  imageContrast?: number;
+  imageSaturation?: number;
+  tileBlendMode?: TileBlendMode;
+  blendStrength?: number;
   topAmplitude: number;
   topAngle: number;
   topPosition: number;
@@ -48,9 +64,10 @@ type VisualSettings = {
 };
 
 type ControlKey = keyof EffectSettings;
+type NumericControlKey = "density" | "speed" | "scale" | "variation" | "glow" | "attack" | "release" | "flickerSpeed" | "tileGap";
 
 type ControlConfig = {
-  key: ControlKey;
+  key: NumericControlKey;
   label: string;
   max: number;
   min: number;
@@ -89,7 +106,8 @@ const effectConfigs: Record<EffectId, EffectConfig> = {
   "practical-demo": {
     controls: [
       { key: "density", label: "Columns", min: 14, max: 30 },
-      { key: "scale", label: "Scale", min: 8, max: 24 },
+      { key: "scale", label: "Scale", min: 4, max: 24 },
+      { key: "tileGap", label: "Card Gap", min: 0, max: 24 },
       { key: "speed", label: "Step Speed", min: 0, max: 9 },
       { key: "glow", label: "Glow", min: 0, max: 100 },
       { key: "attack", label: "Attack", min: 1, max: 100 },
@@ -233,6 +251,13 @@ const initialSettings: Record<EffectId, EffectSettings> = {
     sectionColor2: "#50d6b2",
     sectionColor3: "#ff6f61",
     sectionColor4: "#7c6cff",
+    boxColor: "#9d927d",
+    imageMode: "crop",
+    imageBrightness: 100,
+    imageContrast: 100,
+    imageSaturation: 100,
+    tileBlendMode: "multiply",
+    blendStrength: 100,
     topAmplitude: 50,
     topAngle: 0,
     topPosition: 0,
@@ -257,11 +282,12 @@ const initialSettings: Record<EffectId, EffectSettings> = {
     sectionColor2: "#50d6b2",
     sectionColor3: "#ff6f61",
     sectionColor4: "#7c6cff",
-    tileGap: 8,
-    sectionColor1: "#f5c542",
-    sectionColor2: "#50d6b2",
-    sectionColor3: "#ff6f61",
-    sectionColor4: "#7c6cff",
+    rhythm: 50,
+    patternOffset: 0,
+    tileRadius: 0,
+    fillOpacity: 100,
+    strokeWidth: 0,
+    strokeColor: "#ffffff",
     topAmplitude: 50,
     topAngle: 0,
     topPosition: 0,
@@ -281,6 +307,11 @@ const initialSettings: Record<EffectId, EffectSettings> = {
     attack: 35,
     release: 55,
     flickerSpeed: 50,
+    tileGap: 8,
+    sectionColor1: "#f5c542",
+    sectionColor2: "#50d6b2",
+    sectionColor3: "#ff6f61",
+    sectionColor4: "#7c6cff",
     topAmplitude: 58,
     topAngle: 0,
     topPosition: 0,
@@ -605,6 +636,12 @@ export default function AnimationLab() {
     useState<Record<EffectId, EffectSettings>>(initialSettings);
   const [visuals, setVisuals] = useState<VisualSettings>(initialVisuals);
   const [codeTab, setCodeTab] = useState<CodeTab>("logic");
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const [codeCollapsed, setCodeCollapsed] = useState(false);
+  const [previewWidth, setPreviewWidth] = useState(390);
+  const [animationOnly, setAnimationOnly] = useState(false);
+  const [practicalImage, setPracticalImage] = useState<string | null>(null);
+  const [workingImage, setWorkingImage] = useState<string | null>(null);
   const [codeDrafts, setCodeDrafts] = useState<Record<string, string>>({});
   const [appliedCssByEffect, setAppliedCssByEffect] =
     useState<AppliedCssMap>(initialAppliedCss);
@@ -728,6 +765,26 @@ export default function AnimationLab() {
       [logicDraftKey]: buildLogicDraft(effect, settings, visuals),
     }));
   };
+  const uploadBackgroundImage = (target: EffectId, file: File | null) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      if (target === "working-knowledge") setWorkingImage(result);
+      else setPracticalImage(result);
+    };
+    reader.readAsDataURL(file);
+  };
+  const layoutColumns = controlsCollapsed
+    ? codeCollapsed
+      ? "48px minmax(0,1fr) 48px"
+      : "48px minmax(0,1fr) minmax(260px,20%)"
+    : codeCollapsed
+      ? "minmax(240px,20%) minmax(0,1fr) 48px"
+      : "minmax(240px,20%) minmax(0,60%) minmax(260px,20%)";
+  const previewAspect = 10 / 16;
+  const previewScale = previewWidth / 390;
+  const animationBackground = effect === "practical-demo" ? "#f2e8d4" : effect === "section-grid" ? "#17233f" : "#e54f10";
 
   return (
     <main
@@ -741,87 +798,78 @@ export default function AnimationLab() {
         } as CSSProperties
       }
     >
-      <section className="mx-auto grid min-h-screen w-full max-w-[1680px] gap-5 px-4 py-4 lg:grid-cols-[300px_minmax(0,1fr)_minmax(420px,520px)] lg:px-6">
-        <aside className="flex min-h-[calc(100vh-32px)] flex-col gap-5">
+      <section
+        className="mx-auto grid min-h-screen w-full max-w-[1680px] gap-5 px-4 py-4 lg:px-6"
+        style={{
+          gridTemplateAreas: '"controls canvas code"',
+          gridTemplateColumns: layoutColumns,
+        }}
+      >
+        <aside className="flex min-h-[calc(100vh-32px)] min-w-0 flex-col gap-5 overflow-hidden" style={{ gridArea: "controls" }}>
           <div>
-            <p className="text-sm font-semibold uppercase text-[#6c7970]">
-              Motion Lab
-            </p>
-            <h1 className="mt-3 max-w-sm text-3xl font-semibold leading-[1.08] text-[var(--page-foreground)] sm:text-4xl">
-              Pattern animator
-            </h1>
+            <div className="flex items-center justify-between gap-2">
+              {!controlsCollapsed ? (
+                <p className="text-sm font-semibold uppercase text-[#6c7970]">Controls</p>
+              ) : null}
+              <IconButton icon={controlsCollapsed ? "chevron-right" : "chevron-left"} label={controlsCollapsed ? "Expand controls" : "Collapse controls"} onClick={() => setControlsCollapsed((value) => !value)} />
+            </div>
           </div>
 
-          <EffectTabs activeEffect={effect} setEffect={setEffect} />
-
-          <ControlPanel
-            config={config}
-            effect={effect}
-            resetControls={resetControls}
-            settings={settings}
-            updateSetting={updateSetting}
-            updateVisual={updateVisual}
-            visuals={visuals}
-          />
+          {!controlsCollapsed ? (
+            <>
+              <EffectTabs activeEffect={effect} setEffect={setEffect} />
+              <ControlPanel
+                config={config}
+                effect={effect}
+                resetControls={resetControls}
+                settings={settings}
+                updateSetting={updateSetting}
+                updateVisual={updateVisual}
+                visuals={visuals}
+                onImageUpload={(file) => uploadBackgroundImage(effect, file)}
+              />
+            </>
+          ) : null}
         </aside>
 
-        <div className="flex min-h-[calc(100vh-32px)] items-stretch">
+        <div className="flex min-h-[calc(100vh-32px)] items-stretch" style={{ gridArea: "code" }}>
           <div className="w-full rounded-xl border border-[#d2dbd1] bg-[#fbfcf8] p-4 shadow-[0_18px_50px_rgba(23,32,29,0.08)]">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
+              {!codeCollapsed ? <div>
                 <p className="text-xs font-semibold uppercase text-[#7a857d]">
                   Code
                 </p>
                 <h2 className="mt-1 text-base font-semibold text-[#17201d]">
                   {config.label}
                 </h2>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-md border border-[#cad4ca] px-3 py-2 text-xs font-semibold text-[#4b5751] transition hover:bg-[#eef4ea]"
-                  onClick={copyCode}
-                  type="button"
-                >
-                  Copy
-                </button>
-                <button
-                  className="rounded-md border border-[#cad4ca] px-3 py-2 text-xs font-semibold text-[#4b5751] transition hover:bg-[#eef4ea]"
-                  onClick={applyCssDraft}
-                  type="button"
-                >
-                  Apply CSS
-                </button>
-                <button
-                  className="rounded-md border border-[#cad4ca] px-3 py-2 text-xs font-semibold text-[#4b5751] transition hover:bg-[#eef4ea]"
-                  onClick={syncLogicDraft}
-                  type="button"
-                >
-                  Sync Code
-                </button>
-                <button
-                  className="rounded-md border border-[#cad4ca] px-3 py-2 text-xs font-semibold text-[#4b5751] transition hover:bg-[#eef4ea]"
-                  onClick={codeTab === "css" ? resetCssDraft : resetLogicDraft}
-                  type="button"
-                >
-                  Reset
-                </button>
-              </div>
+              </div> : null}
+              {!codeCollapsed ? <div className="flex gap-1">
+                <IconButton icon="copy" label="Copy code" onClick={copyCode} />
+                <IconButton icon="apply" label="Apply CSS" onClick={applyCssDraft} />
+                <IconButton icon="sync" label="Sync code" onClick={syncLogicDraft} />
+                <IconButton icon="reset" label="Reset code" onClick={codeTab === "css" ? resetCssDraft : resetLogicDraft} />
+              </div> : null}
+              <IconButton icon={codeCollapsed ? "chevron-left" : "chevron-right"} label={codeCollapsed ? "Expand code" : "Collapse code"} onClick={() => setCodeCollapsed((value) => !value)} />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            {codeCollapsed ? null : (
+              <>
+
+            <div className="flex gap-1">
               {(["logic", "css"] as CodeTab[]).map((tab) => (
                 <button
                   aria-pressed={codeTab === tab}
-                  className={`rounded-md px-3 py-2 text-sm font-semibold capitalize transition ${
+                  className={`icon-tool relative flex h-8 w-8 items-center justify-center rounded-md transition ${
                     codeTab === tab
                       ? "bg-[#17201d] text-white"
                       : "bg-[#eef4ea] text-[#56615b] hover:bg-[#e2eadf]"
                   }`}
                   key={tab}
                   onClick={() => setCodeTab(tab)}
+                  title={tab === "logic" ? "Logic" : "CSS"}
                   type="button"
                 >
-                  {tab === "logic" ? "Logic" : "CSS"}
+                  <ToolIcon name="code" />
                 </button>
               ))}
             </div>
@@ -869,26 +917,41 @@ export default function AnimationLab() {
               spellCheck={false}
               value={displayCode}
             />
+              </>
+            )}
           </div>
         </div>
 
-        <div className="flex min-h-[calc(100vh-32px)] items-center justify-center rounded-xl border border-[#d2dbd1] bg-[#fbfcf8] p-4 shadow-[0_18px_50px_rgba(23,32,29,0.08)]">
-          <div className="relative w-full max-w-[430px]">
-            <style>{appliedCss}</style>
-            {effect === "practical-demo" ? (
-              <PracticalDemoCard settings={settings} />
-            ) : effect === "section-grid" ? (
-              <SectionGridCard settings={settings} />
-            ) : effect === "working-knowledge" ? (
-              <WorkingKnowledgeCard settings={settings} />
-            ) : (
-              <PatternCard
-                config={config}
-                effect={effect}
-                settings={settings}
-                visuals={visuals}
-              />
-            )}
+        <div
+          className={`${animationOnly ? "fixed inset-0 z-50 bg-[#0f1211]" : "relative min-h-[calc(100vh-32px)] rounded-xl border border-[#d2dbd1] bg-[#e8ebe7] shadow-[0_18px_50px_rgba(23,32,29,0.08)]"} flex items-center justify-center overflow-hidden p-4`}
+          style={{ gridArea: "canvas" }}
+        >
+          <div className="absolute left-1/2 top-3 z-20 flex -translate-x-1/2 items-center gap-3 rounded-md border border-[#cbd3ca] bg-white px-3 py-2 shadow-sm">
+            {!animationOnly ? (
+              <label className="flex items-center gap-2 text-xs font-semibold text-[#4d5a53]">
+                Size
+                <input className="motion-slider w-32" max={720} min={240} onChange={(event) => setPreviewWidth(Number(event.target.value))} type="range" value={previewWidth} />
+                <span className="w-10 text-right">{previewWidth}</span>
+              </label>
+            ) : null}
+            <IconButton icon="fullscreen" label={animationOnly ? "Exit full screen" : "Animation full screen"} onClick={() => setAnimationOnly((value) => !value)} />
+          </div>
+          <div
+            className={`animation-only animation-stage ${animationOnly ? "h-full w-full" : "relative overflow-hidden border border-[#c8cfca]"}`}
+            style={animationOnly ? { background: animationBackground } : { width: `${previewWidth}px`, height: `${previewWidth * previewAspect}px`, maxWidth: "100%", background: animationBackground }}
+          >
+            <div style={animationOnly ? { width: "100%", height: "100%" } : { width: "390px", height: `${390 * previewAspect}px`, transform: `scale(${previewScale})`, transformOrigin: "left top" }}>
+              <style>{appliedCss}</style>
+              {effect === "practical-demo" ? (
+                <PracticalDemoCard image={practicalImage} settings={settings} />
+              ) : effect === "section-grid" ? (
+                <SectionGridCard settings={settings} />
+              ) : effect === "working-knowledge" ? (
+                <WorkingKnowledgeCard image={workingImage} settings={settings} />
+              ) : (
+                <PatternCard config={config} effect={effect} settings={settings} visuals={visuals} />
+              )}
+            </div>
           </div>
         </div>
       </section>
@@ -940,6 +1003,33 @@ function buildLogicDraft(
   return `${header}${codeSnippets[effect].logic}`;
 }
 
+function IconButton({ icon, label, onClick }: { icon: ToolIconName; label: string; onClick: () => void }) {
+  return (
+    <button aria-label={label} className="icon-tool relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[#cad4ca] text-[#4b5751] transition hover:bg-[#eef4ea]" onClick={onClick} title={label} type="button">
+      <ToolIcon name={icon} />
+    </button>
+  );
+}
+
+function ToolIcon({ name }: { name: ToolIconName }) {
+  const common = { fill: "none", stroke: "currentColor", strokeLinecap: "round" as const, strokeLinejoin: "round" as const, strokeWidth: 1.8 };
+  const paths: Record<ToolIconName, ReactNode> = {
+    apply: <><path d="M5 12l4 4L19 6" /><path d="M4 20h16" /></>,
+    "chevron-left": <path d="M15 18l-6-6 6-6" />,
+    "chevron-right": <path d="M9 18l6-6-6-6" />,
+    code: <><path d="M8 9l-3 3 3 3" /><path d="M16 9l3 3-3 3" /><path d="M14 5l-4 14" /></>,
+    copy: <><rect height="12" rx="2" width="12" x="8" y="8" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>,
+    fullscreen: <><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></>,
+    grid: <><rect height="6" width="6" x="3" y="3" /><rect height="6" width="6" x="15" y="3" /><rect height="6" width="6" x="3" y="15" /><rect height="6" width="6" x="15" y="15" /></>,
+    image: <><rect height="16" rx="2" width="18" x="3" y="4" /><circle cx="9" cy="9" r="2" /><path d="M21 15l-5-5L5 20" /></>,
+    pattern: <><path d="M3 3l9 9L3 21z" /><path d="M21 3l-9 9 9 9z" /><path d="M3 3h18L12 12z" /><path d="M3 21h18l-9-9z" /></>,
+    reset: <><path d="M4 10a8 8 0 1 1 2 7" /><path d="M4 4v6h6" /></>,
+    sync: <><path d="M20 7h-5V2" /><path d="M4 17h5v5" /><path d="M6.2 6.2A8 8 0 0 1 20 7M4 17a8 8 0 0 0 13.8.8" /></>,
+    wave: <path d="M3 12c3-8 6 8 9 0s6 8 9 0" />,
+  };
+  return <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" {...common}>{paths[name]}</svg>;
+}
+
 function EffectTabs({
   activeEffect,
   setEffect,
@@ -949,20 +1039,21 @@ function EffectTabs({
 }) {
   return (
     <div className="rounded-lg border border-[#d2dbd1] bg-[#fbfcf8] p-3 shadow-[0_18px_50px_rgba(23,32,29,0.08)]">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="flex gap-1">
         {(Object.keys(effectConfigs) as EffectId[]).map((id) => (
           <button
             aria-pressed={activeEffect === id}
-            className={`rounded-md px-3 py-3 text-left text-sm font-semibold leading-tight transition ${
+            className={`icon-tool relative flex h-9 w-9 items-center justify-center rounded-md transition ${
               activeEffect === id
                 ? "bg-[#17201d] text-white"
                 : "bg-transparent text-[#56615b] hover:bg-[#eef4ea]"
             }`}
             key={id}
             onClick={() => setEffect(id)}
+            title={effectConfigs[id].label}
             type="button"
           >
-            {effectConfigs[id].label}
+            <ToolIcon name={id === "practical-demo" ? "grid" : id === "section-grid" ? "pattern" : "wave"} />
           </button>
         ))}
       </div>
@@ -970,7 +1061,7 @@ function EffectTabs({
   );
 }
 
-function PracticalDemoCard({ settings }: { settings: EffectSettings }) {
+function PracticalDemoCard({ image, settings }: { image: string | null; settings: EffectSettings }) {
   const [time, setTime] = useState(0);
 
   useEffect(() => {
@@ -988,12 +1079,18 @@ function PracticalDemoCard({ settings }: { settings: EffectSettings }) {
 
   return (
     <article
-      className="practical-card relative aspect-[4/5] w-full max-w-[390px] overflow-hidden rounded-[30px] border border-[#e2d6bf] bg-[#f2e8d4] shadow-[0_30px_90px_rgba(32,26,18,0.24)]"
+      className="practical-card relative aspect-[4/5] w-full overflow-hidden rounded-[30px] border border-[#e2d6bf] bg-[#f2e8d4] shadow-[0_30px_90px_rgba(32,26,18,0.24)]"
     >
+      {image ? (
+        <div
+          className="animation-image-layer absolute inset-0"
+          style={practicalImageStyle(image, settings)}
+        />
+      ) : null}
       <svg
         aria-hidden="true"
         className="absolute left-9 top-10 h-[180px] w-[calc(100%-72px)]"
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="none"
         viewBox="0 0 318 166"
       >
         {rows.map((row) => (
@@ -1009,6 +1106,7 @@ function PracticalDemoCard({ settings }: { settings: EffectSettings }) {
                 style={
                   {
                     fill: tile.color,
+                    mixBlendMode: settings.tileBlendMode ?? "multiply",
                     opacity: practicalTileOpacity(tile, time, settings),
                     "--tile-step": `${tile.step}px`,
                   } as CSSProperties
@@ -1070,9 +1168,12 @@ function SectionGridCard({ settings }: { settings: EffectSettings }) {
     settings.sectionColor4,
   ];
   const speed = settings.speed / 5;
+  const fillOpacity = (settings.fillOpacity ?? 100) / 100;
+  const strokeWidth = settings.strokeWidth ?? 0;
+  const strokeColor = settings.strokeColor ?? "#ffffff";
 
   return (
-    <article className="relative aspect-[4/5] w-full max-w-[390px] overflow-hidden rounded-[30px] bg-[#17233f] shadow-[0_30px_90px_rgba(18,25,60,0.35)]">
+    <article className="relative aspect-[4/5] w-full overflow-hidden rounded-[30px] bg-[#17233f] shadow-[0_30px_90px_rgba(18,25,60,0.35)]">
       <svg
         aria-hidden="true"
         className="absolute left-8 top-8 h-[190px] w-[calc(100%-64px)]"
@@ -1085,12 +1186,16 @@ function SectionGridCard({ settings }: { settings: EffectSettings }) {
           const x = (318 - gridWidth) / 2 + column * (tileSize + gap);
           const y = 8 + row * (tileSize + gap);
           const tilePhase = tileNoise(column, row, settings.variation);
+          const clipId = `fourfold-clip-${index}`;
           return (
             <g key={`fourfold-${index}`} transform={`translate(${x} ${y})`}>
-              <polygon points={`0,0 ${tileSize / 2},${tileSize / 2} 0,${tileSize}`} fill={colors[0]} opacity={sectionFillOpacity(0, tilePhase, time, speed, settings.variation)} />
-              <polygon points={`${tileSize},0 ${tileSize / 2},${tileSize / 2} ${tileSize},${tileSize}`} fill={colors[1]} opacity={sectionFillOpacity(1, tilePhase, time, speed, settings.variation)} />
-              <polygon points={`0,0 ${tileSize},0 ${tileSize / 2},${tileSize / 2}`} fill={colors[2]} opacity={sectionFillOpacity(2, tilePhase, time, speed, settings.variation)} />
-              <polygon points={`0,${tileSize} ${tileSize / 2},${tileSize / 2} ${tileSize},${tileSize}`} fill={colors[3]} opacity={sectionFillOpacity(3, tilePhase, time, speed, settings.variation)} />
+              <defs><clipPath id={clipId}><rect height={tileSize} rx={settings.tileRadius ?? 0} width={tileSize} /></clipPath></defs>
+              <g clipPath={`url(#${clipId})`} stroke={strokeColor} strokeWidth={strokeWidth}>
+                <polygon points={`0,0 ${tileSize / 2},${tileSize / 2} 0,${tileSize}`} fill={colors[0]} opacity={sectionFillOpacity(0, tilePhase, time, speed, settings.variation, settings.rhythm ?? 50, settings.patternOffset ?? 0) * fillOpacity} />
+                <polygon points={`${tileSize},0 ${tileSize / 2},${tileSize / 2} ${tileSize},${tileSize}`} fill={colors[1]} opacity={sectionFillOpacity(1, tilePhase, time, speed, settings.variation, settings.rhythm ?? 50, settings.patternOffset ?? 0) * fillOpacity} />
+                <polygon points={`0,0 ${tileSize},0 ${tileSize / 2},${tileSize / 2}`} fill={colors[2]} opacity={sectionFillOpacity(2, tilePhase, time, speed, settings.variation, settings.rhythm ?? 50, settings.patternOffset ?? 0) * fillOpacity} />
+                <polygon points={`0,${tileSize} ${tileSize / 2},${tileSize / 2} ${tileSize},${tileSize}`} fill={colors[3]} opacity={sectionFillOpacity(3, tilePhase, time, speed, settings.variation, settings.rhythm ?? 50, settings.patternOffset ?? 0) * fillOpacity} />
+              </g>
             </g>
           );
         })}
@@ -1105,13 +1210,13 @@ function SectionGridCard({ settings }: { settings: EffectSettings }) {
   );
 }
 
-function sectionFillOpacity(section: number, tilePhase: number, time: number, speed: number, variation: number) {
+function sectionFillOpacity(section: number, tilePhase: number, time: number, speed: number, variation: number, rhythm: number, offset: number) {
   if (speed === 0) return 0.45;
-  const phase = time * speed * 0.7 + tilePhase * (1 + variation / 100) + section * 0.7;
+  const phase = time * speed * 0.7 + tilePhase * (1 + variation / 100) + section * (0.25 + rhythm / 80) + offset / 20;
   return 0.25 + (Math.sin(phase) * 0.5 + 0.5) * 0.75;
 }
 
-function WorkingKnowledgeCard({ settings }: { settings: EffectSettings }) {
+function WorkingKnowledgeCard({ image, settings }: { image: string | null; settings: EffectSettings }) {
   const [time, setTime] = useState(0);
 
   useEffect(() => {
@@ -1133,8 +1238,11 @@ function WorkingKnowledgeCard({ settings }: { settings: EffectSettings }) {
 
   return (
     <article
-      className="relative aspect-[45/58] w-full max-w-[360px] overflow-hidden rounded-[24px] bg-[#e54f10] shadow-[0_30px_90px_rgba(24,14,8,0.35)]"
+      className="relative aspect-[45/58] w-full overflow-hidden rounded-[24px] bg-[#e54f10] shadow-[0_30px_90px_rgba(24,14,8,0.35)]"
     >
+      {image ? (
+        <div className="animation-image-layer absolute inset-0" style={practicalImageStyle(image, settings)} />
+      ) : null}
       <svg
         aria-hidden="true"
         className="absolute left-6 top-6 h-48 w-[312px]"
@@ -1149,6 +1257,10 @@ function WorkingKnowledgeCard({ settings }: { settings: EffectSettings }) {
             x2={bar.x}
             y1={bar.y1}
             y2={bar.y2}
+            style={{
+              mixBlendMode: settings.tileBlendMode ?? "multiply",
+              opacity: (settings.blendStrength ?? 100) / 100,
+            }}
           />
         ))}
       </svg>
@@ -1175,7 +1287,7 @@ function PatternCard({
   visuals,
 }: {
   config: EffectConfig;
-  effect: EffectId;
+  effect: string;
   settings: EffectSettings;
   visuals: VisualSettings;
 }) {
@@ -1375,6 +1487,7 @@ function ShapeMark({
 function ControlPanel({
   config,
   effect,
+  onImageUpload,
   resetControls,
   settings,
   updateSetting,
@@ -1383,6 +1496,7 @@ function ControlPanel({
 }: {
   config: EffectConfig;
   effect: EffectId;
+  onImageUpload: (file: File | null) => void;
   resetControls: () => void;
   settings: EffectSettings;
   updateSetting: <K extends ControlKey>(key: K, value: EffectSettings[K]) => void;
@@ -1393,19 +1507,13 @@ function ControlPanel({
   visuals: VisualSettings;
 }) {
   return (
-    <div className="rounded-lg border border-[#d2dbd1] bg-[#fbfcf8] p-5 shadow-[0_18px_50px_rgba(23,32,29,0.08)]">
+    <div className="rounded-lg border border-[#d2dbd1] bg-[#fbfcf8] p-3 shadow-[0_12px_32px_rgba(23,32,29,0.06)]">
       <div className="flex items-center justify-between">
         <h2 className="text-base font-semibold text-[#17201d]">Controls</h2>
-        <button
-          className="rounded-md border border-[#cad4ca] px-3 py-2 text-sm font-semibold text-[#4b5751] transition hover:bg-[#eef4ea]"
-          onClick={resetControls}
-          type="button"
-        >
-          Reset
-        </button>
+        <IconButton icon="reset" label="Reset controls" onClick={resetControls} />
       </div>
-      {config.controlMode === "dial" ? (
-        <div className="mt-5 grid grid-cols-3 gap-3">
+      {effect === "section-grid" ? null : config.controlMode === "dial" ? (
+        <div className="mt-3 grid grid-cols-3 gap-1">
           {config.controls.map((control) => (
             <Dial
               key={control.key}
@@ -1418,7 +1526,7 @@ function ControlPanel({
           ))}
         </div>
       ) : (
-        <div className="mt-5 space-y-5">
+        <div className="mt-3 space-y-3">
           {config.controls.map((control) => (
             <Slider
               key={control.key}
@@ -1432,8 +1540,39 @@ function ControlPanel({
         </div>
       )}
 
+      {effect === "practical-demo" ? (
+        <div className="mt-4 space-y-4 border-t border-[#e1e7df] pt-4">
+          <ControlSection title="Appearance">
+            <ColorInput label="Box Color" onChange={(value) => updateSetting("boxColor", value)} value={settings.boxColor ?? "#9d927d"} />
+          </ControlSection>
+          <ControlSection title="Tile + Image">
+            <label className="block text-[11px] font-medium text-[#5c6760]">
+              <span className="mb-1 block">Blend Mode</span>
+              <select className="h-8 w-full rounded-md border border-[#d7dfd5] bg-white px-2 text-xs text-[#4d5a53]" onChange={(event) => updateSetting("tileBlendMode", event.target.value as TileBlendMode)} value={settings.tileBlendMode ?? "multiply"}>
+                {(["normal", "multiply", "screen", "overlay", "soft-light", "difference"] as TileBlendMode[]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+              </select>
+            </label>
+            <Slider label="Blend Strength" max={100} min={0} onChange={(value) => updateSetting("blendStrength", value)} value={settings.blendStrength ?? 100} />
+          </ControlSection>
+          <ControlSection title="Background Image">
+            <label className="icon-tool relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-[#cad4ca] text-[#4b5751] hover:bg-[#eef4ea]" title="Upload image">
+              <ToolIcon name="image" />
+              <input accept="image/*" className="sr-only" onChange={(event) => onImageUpload(event.target.files?.[0] ?? null)} type="file" />
+            </label>
+            <div className="grid grid-cols-4 gap-1">
+              {(["fill", "tile", "stretch", "crop"] as ImageMode[]).map((mode) => (
+                <button aria-pressed={(settings.imageMode ?? "crop") === mode} className={`rounded-md border px-1 py-2 text-[10px] capitalize ${(settings.imageMode ?? "crop") === mode ? "border-[#17201d] bg-[#17201d] text-white" : "border-[#d7dfd5] bg-white text-[#5c6760]"}`} key={mode} onClick={() => updateSetting("imageMode", mode)} title={mode} type="button">{mode}</button>
+              ))}
+            </div>
+            <Slider label="Brightness" max={200} min={0} onChange={(value) => updateSetting("imageBrightness", value)} value={settings.imageBrightness ?? 100} />
+            <Slider label="Contrast" max={200} min={0} onChange={(value) => updateSetting("imageContrast", value)} value={settings.imageContrast ?? 100} />
+            <Slider label="Saturation" max={200} min={0} onChange={(value) => updateSetting("imageSaturation", value)} value={settings.imageSaturation ?? 100} />
+          </ControlSection>
+        </div>
+      ) : null}
+
       {effect === "working-knowledge" ? (
-        <div className="mt-6 space-y-5 border-t border-[#e1e7df] pt-5">
+        <div className="mt-4 space-y-3 border-t border-[#e1e7df] pt-4">
           <WavePicker
             label="Top Wave"
             onChange={(value) => updateSetting("topWave", value)}
@@ -1503,16 +1642,48 @@ function ControlPanel({
         </div>
       ) : null}
 
+      {effect === "working-knowledge" ? (
+        <div className="mt-4 space-y-4 border-t border-[#e1e7df] pt-4">
+          <ControlSection title="Bars + Image">
+            <label className="block text-[11px] font-medium text-[#5c6760]">
+              <span className="mb-1 block">Blend Mode</span>
+              <select className="h-8 w-full rounded-md border border-[#d7dfd5] bg-white px-2 text-xs text-[#4d5a53]" onChange={(event) => updateSetting("tileBlendMode", event.target.value as TileBlendMode)} value={settings.tileBlendMode ?? "multiply"}>
+                {(["normal", "multiply", "screen", "overlay", "soft-light", "difference"] as TileBlendMode[]).map((mode) => <option key={mode} value={mode}>{mode}</option>)}
+              </select>
+            </label>
+            <Slider label="Blend Strength" max={100} min={0} onChange={(value) => updateSetting("blendStrength", value)} value={settings.blendStrength ?? 100} />
+          </ControlSection>
+          <ControlSection title="Background Image">
+            <label className="icon-tool relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-[#cad4ca] text-[#4b5751] hover:bg-[#eef4ea]" title="Upload image">
+              <ToolIcon name="image" />
+              <input accept="image/*" className="sr-only" onChange={(event) => onImageUpload(event.target.files?.[0] ?? null)} type="file" />
+            </label>
+            <div className="grid grid-cols-4 gap-1">
+              {(["fill", "tile", "stretch", "crop"] as ImageMode[]).map((mode) => (
+                <button aria-pressed={(settings.imageMode ?? "crop") === mode} className={`rounded-md border px-1 py-2 text-[10px] capitalize ${(settings.imageMode ?? "crop") === mode ? "border-[#17201d] bg-[#17201d] text-white" : "border-[#d7dfd5] bg-white text-[#5c6760]"}`} key={mode} onClick={() => updateSetting("imageMode", mode)} title={mode} type="button">{mode}</button>
+              ))}
+            </div>
+            <Slider label="Brightness" max={200} min={0} onChange={(value) => updateSetting("imageBrightness", value)} value={settings.imageBrightness ?? 100} />
+            <Slider label="Contrast" max={200} min={0} onChange={(value) => updateSetting("imageContrast", value)} value={settings.imageContrast ?? 100} />
+            <Slider label="Saturation" max={200} min={0} onChange={(value) => updateSetting("imageSaturation", value)} value={settings.imageSaturation ?? 100} />
+          </ControlSection>
+        </div>
+      ) : null}
+
       {effect === "section-grid" ? (
-        <div className="mt-6 space-y-5 border-t border-[#e1e7df] pt-5">
-          <Dial
-            label="Tile Gap"
-            max={24}
-            min={0}
-            onChange={(value) => updateSetting("tileGap", value)}
-            value={settings.tileGap}
-          />
-          <div className="grid grid-cols-2 gap-3">
+        <div className="mt-4 space-y-4">
+          <ControlSection title="Structure">
+            <Slider label="Columns" max={9} min={3} onChange={(value) => updateSetting("density", value)} value={settings.density} />
+            <Slider label="Scale" max={72} min={24} onChange={(value) => updateSetting("scale", value)} value={settings.scale} />
+            <Slider label="Gap" max={24} min={0} onChange={(value) => updateSetting("tileGap", value)} value={settings.tileGap} />
+          </ControlSection>
+          <ControlSection title="Motion">
+            <Slider label="Speed" max={9} min={0} onChange={(value) => updateSetting("speed", value)} value={settings.speed} />
+            <Slider label="Rhythm" max={100} min={0} onChange={(value) => updateSetting("rhythm", value)} value={settings.rhythm ?? 50} />
+            <Slider label="Offset" max={100} min={-100} onChange={(value) => updateSetting("patternOffset", value)} value={settings.patternOffset ?? 0} />
+          </ControlSection>
+          <ControlSection title="Appearance">
+            <div className="grid grid-cols-2 gap-3">
             {([1, 2, 3, 4] as const).map((section) => {
               const key = `sectionColor${section}` as const;
               return (
@@ -1524,7 +1695,12 @@ function ControlPanel({
                 />
               );
             })}
-          </div>
+            </div>
+            <Slider label="Radius" max={24} min={0} onChange={(value) => updateSetting("tileRadius", value)} value={settings.tileRadius ?? 0} />
+            <Slider label="Fill" max={100} min={0} onChange={(value) => updateSetting("fillOpacity", value)} value={settings.fillOpacity ?? 100} />
+            <Slider label="Stroke" max={8} min={0} onChange={(value) => updateSetting("strokeWidth", value)} value={settings.strokeWidth ?? 0} />
+            <ColorInput label="Stroke Color" onChange={(value) => updateSetting("strokeColor", value)} value={settings.strokeColor ?? "#ffffff"} />
+          </ControlSection>
         </div>
       ) : null}
 
@@ -1710,6 +1886,15 @@ function ControlGroup({
   );
 }
 
+function ControlSection({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <section className="space-y-4 border-t border-[#dfe5dd] pt-4 first:border-t-0 first:pt-0">
+      <h3 className="text-xs font-semibold uppercase text-[#7a857d]">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
 function SwatchButton({
   active,
   label,
@@ -1811,17 +1996,17 @@ function Dial({
   return (
     <label className="block text-center">
       <span
-        className="relative mx-auto flex h-[72px] w-[72px] items-center justify-center rounded-full border border-[#d9dfd6] bg-[#fffdf8] shadow-inner"
+        className="relative mx-auto flex h-[52px] w-[52px] items-center justify-center rounded-full border border-[#d9dfd6] bg-[#fffdf8] shadow-inner"
         style={{
           background: `conic-gradient(#17201d ${percent}%, #e5ece3 0)`,
         }}
       >
-        <span className="absolute h-[58px] w-[58px] rounded-full bg-[#fffdf8]" />
+        <span className="absolute h-[42px] w-[42px] rounded-full bg-[#fffdf8]" />
         <span
-          className="absolute h-[24px] w-[3px] origin-bottom rounded-full bg-[#17201d]"
-          style={{ transform: `translateY(-12px) rotate(${angle}deg)` }}
+          className="absolute h-[17px] w-[2px] origin-bottom rounded-full bg-[#17201d]"
+          style={{ transform: `translateY(-8px) rotate(${angle}deg)` }}
         />
-        <span className="relative mt-7 text-xs font-semibold text-[#4d5a53]">
+        <span className="relative mt-5 text-[10px] font-semibold text-[#4d5a53]">
           {value}
         </span>
         <input
@@ -1834,7 +2019,7 @@ function Dial({
           value={value}
         />
       </span>
-      <span className="mt-2 block text-xs font-semibold text-[#4d5a53]">
+      <span className="mt-1 block truncate text-[10px] font-medium text-[#657068]" title={label}>
         {label}
       </span>
     </label>
@@ -1856,7 +2041,7 @@ function Slider({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 flex items-center justify-between text-sm font-semibold text-[#4d5a53]">
+      <span className="mb-0 flex items-center justify-between text-[11px] font-medium text-[#5c6760]">
         <span>{label}</span>
         <span>{value}</span>
       </span>
@@ -1955,14 +2140,17 @@ function buildSweepNodes(settings: EffectSettings) {
 }
 
 function buildPracticalRows(settings: EffectSettings) {
-  const rows = Math.max(12, Math.min(20, Math.round(settings.density * 0.85)));
   const size = settings.scale;
-  const gap = Math.max(1, Math.round(size * 0.28));
+  const gap = settings.tileGap;
   const step = size + gap;
   const columns = Math.max(settings.density, Math.ceil(318 / step) + 2);
+  const rows = Math.max(
+    Math.max(12, Math.min(20, Math.round(settings.density * 0.85))),
+    Math.ceil(166 / step) + 1,
+  );
   const startX = 6;
-  const startY = 4;
-  const palette = ["#9d927d", "#897d68", "#bdb39f", "#6f634f", "#4d412f"];
+  const startY = 0;
+  const palette = [settings.boxColor ?? "#9d927d"];
 
   return Array.from({ length: rows }, (_, row) => {
     const rowSeed = tileNoise(row, settings.speed, settings.variation);
@@ -1983,10 +2171,8 @@ function buildPracticalRows(settings: EffectSettings) {
         const x = startX + (column - 1) * step + offset;
         const y = startY + row * step;
         const paletteIndex = (column * 5 + row * 7) % palette.length;
-        const isDark = ((column + row) % 11 === 0) || (column % 9 === 0 && row % 3 === 0);
-
         return {
-          color: isDark ? "#4f432f" : palette[paletteIndex],
+          color: palette[paletteIndex],
           key: `${row}-${column}`,
           phase: tileNoise(column + row * 17, row + settings.variation, settings.scale),
           size,
@@ -2010,7 +2196,7 @@ function practicalTileOpacity(
   settings: EffectSettings,
 ) {
   if (settings.flickerSpeed === 0) {
-    return 0.52 + (settings.glow / 100) * 0.18;
+    return 0.72 * ((settings.blendStrength ?? 100) / 100);
   }
 
   const cycle = (1.2 + tile.phase * 0.9) / (settings.flickerSpeed / 50);
@@ -2023,7 +2209,23 @@ function practicalTileOpacity(
       : Math.pow((1 - phase) * 2, release);
   const glow = settings.glow / 100;
 
-  return 0.52 + envelope * (0.28 + glow * 0.38);
+  return (0.04 + envelope * (0.5 + glow * 0.46)) * ((settings.blendStrength ?? 100) / 100);
+}
+
+function practicalImageStyle(image: string, settings: EffectSettings): CSSProperties {
+  const mode = settings.imageMode ?? "crop";
+  const backgrounds: Record<ImageMode, Pick<CSSProperties, "backgroundPosition" | "backgroundRepeat" | "backgroundSize">> = {
+    fill: { backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundSize: "contain" },
+    tile: { backgroundPosition: "left top", backgroundRepeat: "repeat", backgroundSize: "96px auto" },
+    stretch: { backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundSize: "100% 100%" },
+    crop: { backgroundPosition: "center", backgroundRepeat: "no-repeat", backgroundSize: "cover" },
+  };
+
+  return {
+    backgroundImage: `url(${image})`,
+    filter: `brightness(${settings.imageBrightness ?? 100}%) contrast(${settings.imageContrast ?? 100}%) saturate(${settings.imageSaturation ?? 100}%)`,
+    ...backgrounds[mode],
+  };
 }
 
 function buildWorkingKnowledgeBars(settings: EffectSettings, time: number) {
